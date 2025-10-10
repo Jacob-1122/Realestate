@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { GitCompare, X } from 'lucide-react';
 import { AnalysisResult } from '../types';
 import { formatCurrency, formatPercentage, isValidZipCode } from '../utils/apiHelpers';

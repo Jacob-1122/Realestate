@@ -63,7 +63,8 @@ function App() {
       } else if (typeof fmrData.data.basicdata === 'object') {
         // Regular FMR - object with direct values
         if (fmrData.data.basicdata['Three-Bedroom']) {
-          threeBedroomRent = parseInt(fmrData.data.basicdata['Three-Bedroom']);
+          const value = fmrData.data.basicdata['Three-Bedroom'];
+          threeBedroomRent = typeof value === 'string' ? parseInt(value) : value;
         }
       }
     }

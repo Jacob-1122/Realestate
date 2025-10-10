@@ -34,12 +34,13 @@ export function transformFMRData(fmrData: FMRData | null): FMRDisplay[] {
       }
     } else if (typeof data.basicdata === 'object') {
       // Regular FMR - direct object values
+      const parseValue = (val: any) => typeof val === 'string' ? parseInt(val) : (val || 0);
       fmrValues = {
-        0: parseInt(data.basicdata.Efficiency || '0'),
-        1: parseInt(data.basicdata['One-Bedroom'] || '0'),
-        2: parseInt(data.basicdata['Two-Bedroom'] || '0'),
-        3: parseInt(data.basicdata['Three-Bedroom'] || '0'),
-        4: parseInt(data.basicdata['Four-Bedroom'] || '0'),
+        0: parseValue(data.basicdata.Efficiency),
+        1: parseValue(data.basicdata['One-Bedroom']),
+        2: parseValue(data.basicdata['Two-Bedroom']),
+        3: parseValue(data.basicdata['Three-Bedroom']),
+        4: parseValue(data.basicdata['Four-Bedroom']),
       };
     }
   }

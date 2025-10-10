@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { DollarSign, Home, TrendingUp, Target, Calculator } from 'lucide-react';
 import { InvestmentMetrics, FMRData } from '../types';
 import { formatCurrency, formatPercentage } from '../utils/apiHelpers';

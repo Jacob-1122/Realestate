@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Calculator, DollarSign, TrendingUp, Home } from 'lucide-react';
 import { formatCurrency } from '../utils/apiHelpers';
 
