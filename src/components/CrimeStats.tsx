@@ -1,4 +1,3 @@
-import React from 'react';
 import { Shield, TrendingDown, TrendingUp, Minus } from 'lucide-react';
 import { CrimeData } from '../types';
 

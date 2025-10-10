@@ -1,4 +1,3 @@
-import React from 'react';
 import { Moon, Sun, ArrowLeft } from 'lucide-react';
 import { useTheme } from '../hooks/useLocalStorage';
 

@@ -1,4 +1,3 @@
-import React from 'react';
 import { FileDown } from 'lucide-react';
 import { AnalysisResult } from '../types';
 import { formatCurrency, formatPercentage, formatNumber } from '../utils/apiHelpers';

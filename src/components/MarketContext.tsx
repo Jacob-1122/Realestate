@@ -1,4 +1,3 @@
-import React from 'react';
 import { MapPin, Users } from 'lucide-react';
 import { MarketContext as MarketContextType } from '../types';
 import { formatNumber } from '../utils/apiHelpers';

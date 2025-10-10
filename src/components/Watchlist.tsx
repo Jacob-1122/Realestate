@@ -1,4 +1,3 @@
-import React from 'react';
 import { Bookmark, Trash2, Star } from 'lucide-react';
 import { SavedSearch } from '../types';
 import { formatCurrency } from '../utils/apiHelpers';

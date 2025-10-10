@@ -1,4 +1,3 @@
-import React from 'react';
 import { Home } from 'lucide-react';
 import { FMRData } from '../types';
 import { transformFMRData } from '../utils/dataTransformers';

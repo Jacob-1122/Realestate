@@ -1,4 +1,3 @@
-import React from 'react';
 import { TrendingUp } from 'lucide-react';
 import { InvestmentMetrics } from '../types';
 import { getScoreColor } from '../utils/scoreCalculator';
