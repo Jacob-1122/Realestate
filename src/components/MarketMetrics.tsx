@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DollarSign, Home, TrendingUp, Target, Calculator } from 'lucide-react';
 import { InvestmentMetrics, FMRData } from '../types';
-import { formatCurrency, formatPercentage } from '../utils/apiHelpers';
+import { formatCurrency } from '../utils/apiHelpers';
 import { CashFlowCalculator } from './CashFlowCalculator';
 
 interface MarketMetricsProps {
@@ -51,7 +51,8 @@ export function MarketMetrics({ metrics, loading, censusData, fmrData, censusLoa
         }
       } else if (typeof fmrData.data.basicdata === 'object') {
         if (fmrData.data.basicdata['Three-Bedroom']) {
-          threeBedroomRent = parseInt(fmrData.data.basicdata['Three-Bedroom']);
+          const value = fmrData.data.basicdata['Three-Bedroom'];
+          threeBedroomRent = typeof value === 'string' ? parseInt(value) : value;
         }
       }
     }
@@ -156,7 +157,8 @@ export function MarketMetrics({ metrics, loading, censusData, fmrData, censusLoa
                 } else if (typeof fmrData.data.basicdata === 'object') {
                   // Regular FMR - object with direct values
                   if (fmrData.data.basicdata['Three-Bedroom']) {
-                    threeBedroomRent = parseInt(fmrData.data.basicdata['Three-Bedroom']);
+                    const value = fmrData.data.basicdata['Three-Bedroom'];
+                    threeBedroomRent = typeof value === 'string' ? parseInt(value) : value;
                   }
                 }
               }
