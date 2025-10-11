@@ -4,8 +4,10 @@
 
 [build.environment]
   NODE_VERSION = "18"
+  # Allow these public API keys to be scanned without failing the build
+  # These are client-side API keys for free public APIs (HUD & Census)
+  SECRETS_SCAN_OMIT_KEYS = "VITE_CENSUS_API_KEY,VITE_HUD_API_KEY"
 
-# Prevent build from failing on secret detection
 # Environment variables should be set in Netlify UI: Site Settings > Environment Variables
 [build.processing]
   skip_processing = false
