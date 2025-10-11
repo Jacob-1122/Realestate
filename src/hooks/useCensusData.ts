@@ -48,10 +48,15 @@ export function useCensusData(zipCode: string | null): UseCensusDataResult {
       // B25077_001E = Median value of owner-occupied housing units
       const apiKey = import.meta.env.VITE_CENSUS_API_KEY || 'demo';
       
-      // Use Vite proxy to avoid CORS issues
-      const apiUrl = `/api/census/data/2022/acs/acs5?get=B25077_001E&for=zip%20code%20tabulation%20area:${zipCode}&key=${apiKey}`;
+      // Use proxy in development, direct API in production
+      const isDevelopment = import.meta.env.DEV;
+      const baseUrl = isDevelopment 
+        ? '/api/census' 
+        : 'https://api.census.gov';
       
-      console.log('Fetching Census data from:', apiUrl);
+      const apiUrl = `${baseUrl}/data/2022/acs/acs5?get=B25077_001E&for=zip%20code%20tabulation%20area:${zipCode}&key=${apiKey}`;
+      
+      console.log('Fetching Census data from:', apiUrl, '(dev mode:', isDevelopment, ')');
       
       const response = await fetch(apiUrl);
       
