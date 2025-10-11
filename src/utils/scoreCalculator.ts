@@ -66,16 +66,17 @@ export function calculateInvestmentScore(
     (fmrScore * normalizedFmrWeight) + (crimeScore * normalizedCrimeWeight) + (densityScore * normalizedDensityWeight)
   );
   
-  // Calculate other metrics
-  const rentToPriceRatio = medianHomePrice > 0 ? (threeBedroomRent * 12) / medianHomePrice : 0;
-  const requiredRentFor2Percent = Math.round(medianHomePrice * 0.02); // 2% rule: monthly rent = 2% of purchase price
-  
   // Calculate MAX price you can pay to hit 2% rule based on actual 3BR FMR
   const maxPriceFor2PercentRule = Math.round(threeBedroomRent / 0.02);
   
   // Calculate realistic average home cost (typically 2-3x higher than 2% rule price)
   // This reflects what homes actually sell for in the market
   const realisticAverageHomeCost = Math.round(threeBedroomRent / 0.008); // ~1.25% rule (more realistic)
+  
+  // Calculate other metrics
+  const rentToPriceRatio = medianHomePrice > 0 ? (threeBedroomRent * 12) / medianHomePrice : 0;
+  // Required rent for 2% rule based on realistic average home cost (what you'd need to charge)
+  const requiredRentFor2Percent = Math.round(realisticAverageHomeCost * 0.02);
   
   return {
     score: totalScore,
