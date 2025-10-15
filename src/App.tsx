@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { HomePage } from './pages/HomePage';
 import { SearchPage } from './pages/SearchPage';
+import { MetroAreaAnalysisPage } from './pages/MetroAreaAnalysisPage';
 import { lazy, Suspense } from 'react';
 
 // Lazy load heat map page
@@ -12,6 +13,7 @@ function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/search" element={<SearchPage />} />
+        <Route path="/metro-analysis" element={<MetroAreaAnalysisPage />} />
         <Route 
           path="/heatmap" 
           element={

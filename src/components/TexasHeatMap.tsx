@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, memo } from 'react';
+import { useState, useEffect, useCallback, memo, useRef } from 'react';
 import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
 import type { GeoJsonObject, Feature } from 'geojson';
 import { Map as LeafletIcon, Layers } from 'lucide-react';
@@ -10,25 +10,42 @@ interface TexasHeatMapProps {
   onZipClick: (zipCode: string) => void;
 }
 
+// Debounce function to prevent excessive updates
+function debounce<T extends (...args: any[]) => void>(func: T, wait: number): T {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  return ((...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  }) as T;
+}
+
 // Component to track visible ZIPs in viewport
 function ViewportTracker({ onViewportChange }: { onViewportChange: (zips: string[]) => void }) {
   const map = useMap();
+  const updateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   useEffect(() => {
-    const updateVisibleZips = () => {
-      // In production, you'd extract ZIPs from visible features
-      // For now, we'll trigger on map movement
+    // Debounced update function to prevent excessive calls
+    const debouncedUpdate = debounce(() => {
       onViewportChange([]);
+    }, 300); // Wait 300ms after user stops moving
+
+    const handleMapMove = () => {
+      debouncedUpdate();
     };
 
-    map.on('moveend', updateVisibleZips);
-    map.on('zoomend', updateVisibleZips);
+    map.on('moveend', handleMapMove);
+    map.on('zoomend', handleMapMove);
     
-    updateVisibleZips(); // Initial call
+    // Initial call
+    handleMapMove();
 
     return () => {
-      map.off('moveend', updateVisibleZips);
-      map.off('zoomend', updateVisibleZips);
+      map.off('moveend', handleMapMove);
+      map.off('zoomend', handleMapMove);
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
     };
   }, [map, onViewportChange]);
 
@@ -69,8 +86,8 @@ const TexasHeatMap = memo(function TexasHeatMap({ onZipClick }: TexasHeatMapProp
             }
           });
           console.log(`📍 Loaded ${zipCodes.length} Texas ZIP codes`);
-          // Load first batch of ZIP codes
-          setVisibleZips(zipCodes.slice(0, 100));
+          // Load smaller initial batch to prevent freezing
+          setVisibleZips(zipCodes.slice(0, 50));
         }
         
         setError(null);
@@ -115,28 +132,29 @@ const TexasHeatMap = memo(function TexasHeatMap({ onZipClick }: TexasHeatMapProp
     };
   }, [colorMetric, zipDataMap, getColorForFMR, getZipData]);
 
-  // Handle each feature (add tooltips and click handlers)
+  // Handle each feature (add tooltips and click handlers) - optimized
   const onEachFeature = useCallback((feature: Feature, layer: L.Layer) => {
     const zipCode = feature.properties?.ZCTA5CE10 || feature.properties?.ZCTA || feature.properties?.ZIP;
     if (!zipCode) return;
 
-    const zipData = getZipData(zipCode);
-    
-    // Bind tooltip
-    layer.bindTooltip(`
-      <div style="padding: 8px;">
-        <strong style="font-size: 14px;">ZIP: ${zipCode}</strong><br/>
-        ${zipData && !zipData.loading ? `
-          <div style="margin-top: 4px; font-size: 12px;">
-            <div>Studio: ${formatCurrency(zipData.fmr_0)}</div>
-            <div>1BR: ${formatCurrency(zipData.fmr_1)}</div>
-            <div>2BR: ${formatCurrency(zipData.fmr_2)}</div>
-            <div><strong>3BR: ${formatCurrency(zipData.fmr_3)}</strong></div>
-            <div>4BR: ${formatCurrency(zipData.fmr_4)}</div>
-          </div>
-        ` : '<div style="margin-top: 4px; font-size: 12px;">Loading...</div>'}
-      </div>
-    `, {
+    // Lazy load tooltip content
+    layer.bindTooltip(() => {
+      const zipData = getZipData(zipCode);
+      return `
+        <div style="padding: 8px;">
+          <strong style="font-size: 14px;">ZIP: ${zipCode}</strong><br/>
+          ${zipData && !zipData.loading ? `
+            <div style="margin-top: 4px; font-size: 12px;">
+              <div>Studio: ${formatCurrency(zipData.fmr_0)}</div>
+              <div>1BR: ${formatCurrency(zipData.fmr_1)}</div>
+              <div>2BR: ${formatCurrency(zipData.fmr_2)}</div>
+              <div><strong>3BR: ${formatCurrency(zipData.fmr_3)}</strong></div>
+              <div>4BR: ${formatCurrency(zipData.fmr_4)}</div>
+            </div>
+          ` : '<div style="margin-top: 4px; font-size: 12px;">Loading...</div>'}
+        </div>
+      `;
+    }, {
       sticky: true,
       className: 'custom-tooltip',
     });
@@ -163,7 +181,7 @@ const TexasHeatMap = memo(function TexasHeatMap({ onZipClick }: TexasHeatMapProp
         onZipClick(zipCode);
       },
     });
-  }, [zipDataMap, getZipData, onZipClick]);
+  }, [getZipData, onZipClick]);
 
   const handleViewportChange = useCallback((zips: string[]) => {
     setVisibleZips(zips);
@@ -280,6 +298,9 @@ const TexasHeatMap = memo(function TexasHeatMap({ onZipClick }: TexasHeatMapProp
       <div className="absolute bottom-4 left-4 z-[1000] bg-white dark:bg-gray-800 rounded-lg shadow-lg px-4 py-2">
         <p className="text-sm text-gray-700 dark:text-gray-300">
           <strong>Texas Section 8 Heat Map</strong> - Hover over ZIP codes to see FMR data
+        </p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          Using HUD FY2026 SAFMR data
         </p>
       </div>
     </div>

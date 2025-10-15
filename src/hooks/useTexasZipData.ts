@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useFMRData } from './useFMRData';
+import { useBatchCensusData } from './useBatchCensusData';
 
 export interface ZipFMRData {
   zipCode: string;
@@ -8,183 +10,112 @@ export interface ZipFMRData {
   fmr_3: number;
   fmr_4: number;
   county?: string;
+  metroAreaName?: string;
+  medianHomeValue?: number;
+  investmentScore?: number;
+  investmentGrade?: 'A' | 'B' | 'C' | 'D' | 'F';
   loading: boolean;
   error: boolean;
 }
 
 /**
- * Hook to manage Texas ZIP code data for heat map
- * Fetches FMR data for visible ZIP codes on demand
+ * Calculate investment score based on FMR-to-price ratio
  */
-export function useTexasZipData(visibleZips: string[]) {
-  const [zipDataMap, setZipDataMap] = useState<Map<string, ZipFMRData>>(new Map());
-  const [loading, setLoading] = useState(false);
+function calculateInvestmentScore(fmr3br: number, medianHomeValue: number): { score: number; grade: 'A' | 'B' | 'C' | 'D' | 'F' } {
+  if (medianHomeValue <= 0 || fmr3br <= 0) {
+    return { score: 50, grade: 'C' };
+  }
 
-  useEffect(() => {
-    if (visibleZips.length === 0) return;
-
-    const fetchZipData = async () => {
-      setLoading(true);
-      
-      // Filter out ZIPs we already have data for
-      const newZips = visibleZips.filter(zip => !zipDataMap.has(zip));
-      
-      if (newZips.length === 0) {
-        setLoading(false);
-        return;
-      }
-
-      // Limit batch size to avoid overwhelming the API
-      const batchSize = 20;
-      const zipBatch = newZips.slice(0, batchSize);
-
-      // Mark these ZIPs as loading
-      const newDataMap = new Map(zipDataMap);
-      zipBatch.forEach(zip => {
-        newDataMap.set(zip, {
-          zipCode: zip,
-          fmr_0: 0,
-          fmr_1: 0,
-          fmr_2: 0,
-          fmr_3: 0,
-          fmr_4: 0,
-          loading: true,
-          error: false,
-        });
-      });
-      setZipDataMap(newDataMap);
-
-      // Fetch data for each ZIP (in production, you'd want to batch these better)
-      // For now, we'll use cached data from localStorage if available
-      const updatedDataMap = new Map(newDataMap);
-      
-      for (const zip of zipBatch) {
-        try {
-          // Check localStorage cache first
-          const cacheKey = `fmr_${zip}`;
-          const cached = localStorage.getItem(cacheKey);
-          
-          if (cached) {
-            const cachedData = JSON.parse(cached);
-            // Check if cache is still valid (24 hours)
-            if (Date.now() - cachedData.timestamp < 24 * 60 * 60 * 1000) {
-              updatedDataMap.set(zip, {
-                ...cachedData.data,
-                loading: false,
-                error: false,
-              });
-              continue;
-            }
-          }
-
-          // If no cache, set default values (in real implementation, fetch from HUD API)
-          // For now, we'll use estimated values based on ZIP code patterns
-          const estimatedFMR = estimateFMRFromZip(zip);
-          
-          const zipData: ZipFMRData = {
-            zipCode: zip,
-            ...estimatedFMR,
-            loading: false,
-            error: false,
-          };
-
-          updatedDataMap.set(zip, zipData);
-          
-          // Cache the result
-          localStorage.setItem(cacheKey, JSON.stringify({
-            data: zipData,
-            timestamp: Date.now(),
-          }));
-          
-        } catch (error) {
-          updatedDataMap.set(zip, {
-            zipCode: zip,
-            fmr_0: 0,
-            fmr_1: 0,
-            fmr_2: 0,
-            fmr_3: 0,
-            fmr_4: 0,
-            loading: false,
-            error: true,
-          });
-        }
-      }
-
-      setZipDataMap(updatedDataMap);
-      setLoading(false);
-    };
-
-    fetchZipData();
-  }, [visibleZips.join(',')]); // Only re-run when visible ZIPs change
-
-  return {
-    zipDataMap,
-    loading,
-    getZipData: (zip: string) => zipDataMap.get(zip),
-  };
+  const monthlyRatio = fmr3br / medianHomeValue;
+  
+  let score = 50;
+  if (monthlyRatio >= 0.02) score = 95;
+  else if (monthlyRatio >= 0.015) score = 80;
+  else if (monthlyRatio >= 0.01) score = 60;
+  else if (monthlyRatio >= 0.008) score = 45;
+  else score = 30;
+  
+  let grade: 'A' | 'B' | 'C' | 'D' | 'F' = 'C';
+  if (score >= 90) grade = 'A';
+  else if (score >= 80) grade = 'B';
+  else if (score >= 70) grade = 'C';
+  else if (score >= 60) grade = 'D';
+  else grade = 'F';
+  
+  return { score: Math.round(score), grade };
 }
 
 /**
- * Estimate FMR values based on ZIP code with variation
- * This creates realistic variation across Texas ZIPs
+ * Hook to manage Texas ZIP code data for heat map
+ * Loads FMR data from CSV and Census data for investment scoring
  */
-function estimateFMRFromZip(zipCode: string): Pick<ZipFMRData, 'fmr_0' | 'fmr_1' | 'fmr_2' | 'fmr_3' | 'fmr_4'> {
-  const zipNum = parseInt(zipCode);
-  
-  // Create a deterministic but varied multiplier based on ZIP
-  // This gives each ZIP a unique value while keeping it consistent
-  const zipVariation = ((zipNum % 1000) / 1000) * 0.3; // 0-30% variation
-  
-  // Base multiplier by region
-  let baseMultiplier = 0.85; // Default rural Texas
-  
-  // Houston metro (770xx-772xx, 773xx-775xx)
-  if (zipNum >= 77000 && zipNum < 77600) {
-    baseMultiplier = 1.15 + (zipNum % 100) * 0.003; // 1.15-1.45
-  }
-  // Dallas-Fort Worth (750xx-753xx, 760xx-762xx)
-  else if ((zipNum >= 75000 && zipNum < 75400) || (zipNum >= 76000 && zipNum < 76300)) {
-    baseMultiplier = 1.10 + (zipNum % 100) * 0.003; // 1.10-1.40
-  }
-  // Austin area (786xx-789xx)
-  else if (zipNum >= 78600 && zipNum < 78900) {
-    baseMultiplier = 1.25 + (zipNum % 100) * 0.003; // 1.25-1.55 (highest)
-  }
-  // San Antonio (780xx-782xx)
-  else if (zipNum >= 78000 && zipNum < 78300) {
-    baseMultiplier = 1.00 + (zipNum % 100) * 0.003; // 1.00-1.30
-  }
-  // El Paso (799xx)
-  else if (zipNum >= 79900 && zipNum < 80000) {
-    baseMultiplier = 0.90 + (zipNum % 100) * 0.003; // 0.90-1.20
-  }
-  // Corpus Christi (784xx)
-  else if (zipNum >= 78400 && zipNum < 78500) {
-    baseMultiplier = 0.95 + (zipNum % 100) * 0.003; // 0.95-1.25
-  }
-  // Other cities and suburbs
-  else if (zipNum >= 75000 && zipNum < 80000) {
-    baseMultiplier = 0.90 + zipVariation; // 0.90-1.20
-  }
-  // Rural areas
-  else {
-    baseMultiplier = 0.75 + zipVariation; // 0.75-1.05
-  }
+export function useTexasZipData(_visibleZips: string[]) {
+  const [zipDataMap, setZipDataMap] = useState<Map<string, ZipFMRData>>(new Map());
+  const [texasZipCodes, setTexasZipCodes] = useState<string[]>([]);
+  const { zipData, loading: fmrLoading, error: fmrError } = useFMRData();
+  const { data: censusData, loading: censusLoading, loadedCount, totalCount } = useBatchCensusData(texasZipCodes);
 
-  // Add some randomness but keep it deterministic per ZIP
-  const seed = zipNum * 12345;
-  const pseudoRandom = (seed % 1000) / 10000; // 0-0.1
-  const finalMultiplier = baseMultiplier + pseudoRandom;
+  // Extract Texas ZIP codes from FMR data
+  useEffect(() => {
+    if (fmrLoading || fmrError || zipData.length === 0) return;
+    if (texasZipCodes.length > 0) return; // Already extracted
 
-  // Base FMR values for Texas (realistic state averages)
-  const baseFMR = {
-    fmr_0: Math.round(650 * finalMultiplier),
-    fmr_1: Math.round(750 * finalMultiplier),
-    fmr_2: Math.round(950 * finalMultiplier),
-    fmr_3: Math.round(1200 * finalMultiplier),
-    fmr_4: Math.round(1450 * finalMultiplier),
+    const txZips: string[] = [];
+    zipData.forEach(zip => {
+      const zipNum = parseInt(zip.zipCode);
+      if (zipNum >= 75000 && zipNum < 80000) {
+        txZips.push(zip.zipCode);
+      }
+    });
+
+    console.log(`📍 Found ${txZips.length} Texas ZIP codes, initiating Census batch fetch...`);
+    setTexasZipCodes(txZips);
+  }, [zipData, fmrLoading, fmrError]);
+
+  // Build combined map with FMR and Census data
+  useEffect(() => {
+    if (fmrLoading || fmrError || zipData.length === 0) return;
+    if (texasZipCodes.length === 0) return;
+
+    // Build map from CSV data
+    const newDataMap = new Map<string, ZipFMRData>();
+    
+    zipData.forEach(zip => {
+      const zipNum = parseInt(zip.zipCode);
+      if (zipNum >= 75000 && zipNum < 80000) {
+        const medianHomeValue = censusData[zip.zipCode]?.medianHomeValue;
+        const { score, grade } = medianHomeValue 
+          ? calculateInvestmentScore(zip.safmr3br, medianHomeValue)
+          : { score: undefined, grade: undefined };
+
+        newDataMap.set(zip.zipCode, {
+          zipCode: zip.zipCode,
+          fmr_0: zip.safmr0br,
+          fmr_1: zip.safmr1br,
+          fmr_2: zip.safmr2br,
+          fmr_3: zip.safmr3br,
+          fmr_4: zip.safmr4br,
+          metroAreaName: zip.metroAreaName,
+          medianHomeValue,
+          investmentScore: score,
+          investmentGrade: grade,
+          loading: false,
+          error: false,
+        });
+      }
+    });
+
+    const withScores = Array.from(newDataMap.values()).filter(z => z.investmentScore).length;
+    console.log(`📊 Built map: ${newDataMap.size} ZIPs, ${withScores} with investment scores (${loadedCount}/${totalCount} Census data loaded)`);
+    setZipDataMap(newDataMap);
+  }, [zipData, fmrLoading, fmrError, censusData, loadedCount, totalCount, texasZipCodes.length]);
+
+  return {
+    zipDataMap,
+    loading: fmrLoading || (censusLoading && loadedCount === 0),
+    censusLoading,
+    censusProgress: { loaded: loadedCount, total: totalCount },
+    getZipData: (zip: string) => zipDataMap.get(zip),
   };
-
-  return baseFMR;
 }
 

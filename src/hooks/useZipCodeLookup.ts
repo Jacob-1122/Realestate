@@ -32,7 +32,8 @@ export function useZipCodeLookup(zipCode: string | null): UseZipCodeLookupResult
       const cacheKey = getCacheKey('zipcode', zipCode);
       const cached = getCachedData<ZipCodeLocation>(cacheKey);
       
-      if (cached) {
+      // Only use cache if it has a valid county (not "Unknown County")
+      if (cached && cached.county !== 'Unknown County') {
         setLocation(cached);
         setLoading(false);
         return;
@@ -80,6 +81,53 @@ export function useZipCodeLookup(zipCode: string | null): UseZipCodeLookupResult
         }
       }
       
+      // If still no county, try Zippopotam.us API as fallback (CORS-enabled)
+      if (!countyName) {
+        console.log('🔄 Nominatim failed to find county, trying Zippopotam.us API fallback...');
+        try {
+          const zippoUrl = `https://api.zippopotam.us/us/${zipCode}`;
+          const zippoResponse = await fetch(zippoUrl, { signal: controller.signal });
+          if (zippoResponse.ok) {
+            const zippoData = await zippoResponse.json();
+            console.log('Zippopotam API response:', zippoData);
+            // Zippopotam returns places with state/county info
+            if (zippoData.places && zippoData.places.length > 0) {
+              // Try to get county from the place data
+              const place = zippoData.places[0];
+              // Sometimes county is in 'state' field or we need to infer from place name
+              if (place['place name']) {
+                // For Missouri ZIP codes, try FCC API with coordinates
+                console.log('Trying FCC with Zippopotam coordinates...');
+                const lat = place.latitude;
+                const lon = place.longitude;
+                try {
+                  // Use a CORS proxy for FCC API
+                  const fccUrl = `https://geo.fcc.gov/api/census/area?lat=${lat}&lon=${lon}&format=json`;
+                  const fccResponse = await fetch(fccUrl, { 
+                    signal: controller.signal,
+                    mode: 'cors'
+                  });
+                  if (fccResponse.ok) {
+                    const fccData = await fccResponse.json();
+                    if (fccData.results && fccData.results.length > 0) {
+                      const countyData = fccData.results[0].county_name;
+                      if (countyData) {
+                        countyName = countyData;
+                        console.log('✅ FCC API (via Zippopotam) found county:', countyName);
+                      }
+                    }
+                  }
+                } catch (fccError) {
+                  console.warn('⚠️ FCC API via Zippopotam failed:', fccError);
+                }
+              }
+            }
+          }
+        } catch (zippoError) {
+          console.warn('⚠️ Zippopotam API fallback failed:', zippoError);
+        }
+      }
+      
       // Clean up county name - remove " County" suffix if present for matching
       const cleanCountyName = countyName ? countyName.replace(/ County$/i, '') + ' County' : 'Unknown County';
 
@@ -97,7 +145,10 @@ export function useZipCodeLookup(zipCode: string | null): UseZipCodeLookupResult
       console.log('Geocoding result:', result);
       console.log('Extracted county:', cleanCountyName);
 
-      setCachedData(cacheKey, locationData);
+      // Only cache if we have a valid county (not "Unknown County")
+      if (cleanCountyName !== 'Unknown County') {
+        setCachedData(cacheKey, locationData);
+      }
       setLocation(locationData);
 
       // Clear timeout on success

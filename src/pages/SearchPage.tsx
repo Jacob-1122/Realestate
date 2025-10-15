@@ -13,13 +13,13 @@ import { ZipCodeMap } from '../components/ZipCodeMap';
 import { Watchlist } from '../components/Watchlist';
 import { ComparisonTool } from '../components/ComparisonTool';
 import { PDFExport } from '../components/PDFExport';
-import { useHUDData } from '../hooks/useHUDData';
+import { useZipFMRData } from '../hooks/useZipFMRData';
 import { useCrimeData } from '../hooks/useCrimeData';
 import { useZipCodeLookup } from '../hooks/useZipCodeLookup';
 import { useCensusData } from '../hooks/useCensusData';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { calculateInvestmentScore, estimateMedianHomePrice } from '../utils/scoreCalculator';
-import { clearExpiredCache } from '../utils/apiHelpers';
+import { clearExpiredCache, clearAllCache } from '../utils/apiHelpers';
 import { AnalysisResult, SavedSearch, MarketContext as MarketContextType } from '../types';
 
 export function SearchPage() {
@@ -35,11 +35,7 @@ export function SearchPage() {
 
   // Fetch data for current ZIP code
   const { location, loading: locationLoading } = useZipCodeLookup(currentZipCode);
-  const { data: fmrData, loading: fmrLoading, error: fmrError } = useHUDData(
-    currentZipCode,
-    location?.state_abbr || null,
-    location?.county || null
-  );
+  const { data: fmrData, loading: fmrLoading, error: fmrError } = useZipFMRData(currentZipCode);
   const { data: crimeData, loading: crimeLoading } = useCrimeData(
     location?.county || null,
     location?.state || null
@@ -82,7 +78,7 @@ export function SearchPage() {
     const medianHomePrice = censusData?.medianHomeValue || estimateMedianHomePrice(threeBedroomRent);
     const populationDensity = location.population || 0;
 
-    return calculateInvestmentScore(fmrData, crimeData, populationDensity, medianHomePrice);
+    return calculateInvestmentScore(fmrData, crimeData, medianHomePrice, populationDensity);
   }, [fmrData, crimeData, location, censusData]);
 
   const marketContext: MarketContextType | null = React.useMemo(() => {
@@ -151,10 +147,10 @@ export function SearchPage() {
 
         {/* Action Buttons */}
         {!currentZipCode && (
-          <div className="flex justify-center gap-4 flex-wrap px-4">
+          <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 px-4">
             <button
               onClick={() => setShowWatchlist(!showWatchlist)}
-              className="flex items-center gap-2 px-6 py-3 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:border-primary transition-all shadow-sm"
+              className="flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:border-primary transition-all shadow-sm"
             >
               <Bookmark className="w-5 h-5" />
               Watchlist ({savedSearches.length})
@@ -162,7 +158,7 @@ export function SearchPage() {
             
             <button
               onClick={() => setShowComparison(!showComparison)}
-              className="flex items-center gap-2 px-6 py-3 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:border-primary transition-all shadow-sm"
+              className="flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:border-primary transition-all shadow-sm"
             >
               <GitCompare className="w-5 h-5" />
               Compare ZIP Codes
@@ -194,19 +190,19 @@ export function SearchPage() {
 
         {/* Recent Searches */}
         {!currentZipCode && !showWatchlist && !showComparison && searchHistory.length > 0 && (
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-            <div className="flex items-center gap-2 mb-4">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
+            <div className="flex items-center gap-2 mb-3 sm:mb-4">
               <History className="w-5 h-5 text-primary" />
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">
                 Recent Searches
               </h3>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
               {searchHistory.map(zip => (
                 <button
                   key={zip}
                   onClick={() => handleSearch(zip)}
-                  className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-primary hover:text-white transition-all"
+                  className="px-3 sm:px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-primary hover:text-white transition-all text-sm sm:text-base font-medium"
                 >
                   {zip}
                 </button>
@@ -229,8 +225,9 @@ export function SearchPage() {
             {fmrError.includes('cache') && (
               <button
                 onClick={() => {
-                  localStorage.clear();
-                  window.location.reload();
+                  clearAllCache();
+                  // Small delay to let cache clear complete
+                  setTimeout(() => window.location.reload(), 100);
                 }}
                 className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all"
               >
@@ -242,13 +239,13 @@ export function SearchPage() {
 
         {/* Main Content */}
         {hasData && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
             <div className="flex justify-end">
               <PDFExport result={currentResult!} />
             </div>
 
             {investmentMetrics && (
-              <div className="grid lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                 <InvestmentScore 
                   metrics={investmentMetrics} 
                   loading={isMainDataLoading}
@@ -263,7 +260,7 @@ export function SearchPage() {
               </div>
             )}
 
-            <div className="grid lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               <FMRDisplay data={fmrData} loading={fmrLoading} />
               <CrimeStats data={crimeData} loading={crimeLoading} />
             </div>

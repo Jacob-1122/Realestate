@@ -1,6 +1,7 @@
 [build]
   command = "npm run build"
   publish = "dist"
+  functions = "netlify/functions"
 
 [build.environment]
   NODE_VERSION = "18"
@@ -8,9 +9,19 @@
   # These are client-side API keys for free public APIs (HUD & Census)
   SECRETS_SCAN_OMIT_KEYS = "VITE_CENSUS_API_KEY,VITE_HUD_API_KEY"
 
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
 # Environment variables should be set in Netlify UI: Site Settings > Environment Variables
 [build.processing]
   skip_processing = false
+
+# Redirect API calls to Netlify Functions
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
 
 # Security headers
 [[headers]]

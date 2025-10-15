@@ -123,7 +123,7 @@ export function MarketMetrics({ metrics, loading, censusData, fmrData, censusLoa
             ) : censusData ? (
               formatCurrency(censusData.medianHomeValue)
             ) : (
-              formatCurrency(metrics.estimatedPriceRange.median)
+              formatCurrency(metrics.averageHomeCost)
             )}
           </div>
           <div className="text-xs text-gray-600 dark:text-gray-400">

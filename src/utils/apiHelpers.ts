@@ -98,8 +98,61 @@ export function clearExpiredCache(): void {
     }
 
     keysToRemove.forEach(key => localStorage.removeItem(key));
+    
+    if (keysToRemove.length > 0) {
+      console.log(`🧹 Cleared ${keysToRemove.length} expired cache entries`);
+    }
   } catch (error) {
     console.error('Error clearing cache:', error);
+  }
+}
+
+/**
+ * Clear session storage cache when quota exceeded
+ */
+export function clearSessionCache(): void {
+  try {
+    // Clear FMR and Census cache keys
+    const keysToRemove = ['fmr_data_cache_v1', 'texas_census_batch_v1'];
+    
+    keysToRemove.forEach(key => {
+      sessionStorage.removeItem(key);
+    });
+    
+    console.log('🧹 Cleared session storage cache');
+  } catch (error) {
+    console.error('Error clearing session cache:', error);
+  }
+}
+
+/**
+ * Clear all application cache (both localStorage and sessionStorage)
+ * Useful for troubleshooting storage quota issues
+ */
+export function clearAllCache(): void {
+  try {
+    // Clear localStorage cache entries
+    const localStorageKeys = Object.keys(localStorage);
+    const cacheKeys = localStorageKeys.filter(key => key.startsWith('cache_'));
+    
+    cacheKeys.forEach(key => {
+      localStorage.removeItem(key);
+    });
+    
+    // Clear sessionStorage cache entries
+    const sessionStorageKeys = Object.keys(sessionStorage);
+    const sessionCacheKeys = sessionStorageKeys.filter(key => 
+      key.includes('fmr_data_cache') || 
+      key.includes('texas_census_batch')
+    );
+    
+    sessionCacheKeys.forEach(key => {
+      sessionStorage.removeItem(key);
+    });
+    
+    console.log(`🧹 Cleared all cache: ${cacheKeys.length} localStorage + ${sessionCacheKeys.length} sessionStorage entries`);
+  } catch (error) {
+    console.error('Error clearing all cache:', error);
   }
 }
 
