@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { parseCSVToZipData, aggregateByMetroArea, ZipFMRData, MetroAreaAggregate } from '../utils/fmrDataProcessor';
-import { clearSessionCache } from '../utils/apiHelpers';
 
 interface UseFMRDataReturn {
   metroAreas: MetroAreaAggregate[];

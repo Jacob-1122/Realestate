@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { clearSessionCache } from '../utils/apiHelpers';
 
 interface BatchCensusData {
   [zipCode: string]: {

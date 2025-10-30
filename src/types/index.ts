@@ -4,8 +4,8 @@ export interface FMRData {
   year: number;
   data: {
     basicdata: {
-      [key: string]: number;
-    };
+      [key: string]: number | string;
+    } | any[];
     fmr_0?: number;
     fmr_1?: number;
     fmr_2?: number;

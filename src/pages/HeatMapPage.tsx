@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, memo, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, memo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
 import type { GeoJsonObject, Feature } from 'geojson';
-import { Layers, X, ExternalLink, Home, Target, TrendingUp, DollarSign, ChevronDown, Star } from 'lucide-react';
+import { Layers, X, ExternalLink, Home, Target, TrendingUp, DollarSign, ChevronDown } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
 import { useTexasZipData } from '../hooks/useTexasZipData';
 import { useCensusData } from '../hooks/useCensusData';
