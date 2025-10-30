@@ -44,33 +44,60 @@ export function useZipCodeLookup(zipCode: string | null): UseZipCodeLookupResult
       timeoutId = setTimeout(() => controller.abort(), 15000) as unknown as number; // 15 second timeout
 
       // Use Nominatim for geocoding (free, no API key required)
+      // Note: Nominatim requires proper User-Agent and has rate limiting
       const url = `https://nominatim.openstreetmap.org/search?postalcode=${zipCode}&country=US&format=json&addressdetails=1`;
       
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'Section8InvestmentAnalyzer/1.0',
-        },
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch location data');
-      }
-
-      const results = await response.json();
+      let result: any = null;
+      let address: any = {};
       
-      if (!results || results.length === 0) {
-        throw new Error('ZIP code not found');
-      }
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Section8InvestmentAnalyzer/1.0 (https://section8proj.netlify.app/)',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': typeof window !== 'undefined' ? window.location.origin : 'https://section8proj.netlify.app/',
+          },
+          signal: controller.signal,
+        });
 
-      const result = results[0];
-      const address = result.address || {};
+        if (!response.ok) {
+          // If we get rate limited or blocked, continue to fallback methods
+          if (response.status === 429 || response.status === 403) {
+            console.warn('⚠️ Nominatim rate limited or blocked, trying fallback methods...');
+            // Continue to fallbacks below instead of throwing
+          } else {
+            throw new Error(`Failed to fetch location data: ${response.statusText}`);
+          }
+        } else {
+          const results = await response.json();
+          
+          if (results && results.length > 0) {
+            result = results[0];
+            address = result.address || {};
+          } else {
+            console.warn('⚠️ Nominatim returned no results, trying fallback methods...');
+          }
+        }
+      } catch (fetchError) {
+        // If fetch fails (CORS, network, etc.), log and continue to fallbacks
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          throw fetchError; // Re-throw timeout errors
+        }
+        console.warn('⚠️ Nominatim API failed, trying fallback methods:', fetchError);
+        // Set default values so fallbacks can still work
+        if (!result) {
+          result = { lat: '0', lon: '0', address: {} };
+        }
+        if (!address || Object.keys(address).length === 0) {
+          address = {};
+        }
+      }
 
       // Extract county name from various possible fields
       let countyName = address.county || address.county_name || address.region;
       
       // If still no county, try to extract from display_name (often has format: "City, County, State, ZIP, Country")
-      if (!countyName && result.display_name) {
+      if (!countyName && result && result.display_name) {
         const parts = result.display_name.split(',').map((p: string) => p.trim());
         // County is often the second or third part
         for (const part of parts) {
@@ -127,6 +154,73 @@ export function useZipCodeLookup(zipCode: string | null): UseZipCodeLookupResult
           console.warn('⚠️ Zippopotam API fallback failed:', zippoError);
         }
       }
+
+      // Final fallback: Try to extract county/state from CSV file
+      // Always try CSV fallback if we don't have county, even if Nominatim failed
+      if (!countyName || !address.state) {
+        console.log('🔄 Trying CSV fallback to extract location info...');
+        try {
+          const csvResponse = await fetch('/data/fy2026_safmrs.csv', { signal: controller.signal });
+          if (csvResponse.ok) {
+            const csvText = await csvResponse.text();
+            const lines = csvText.split('\n');
+            
+            // Find the line with this ZIP code
+            for (let i = 1; i < lines.length; i++) {
+              if (lines[i].startsWith(zipCode + ',')) {
+                // Parse the CSV line properly handling quoted fields
+                const fields: string[] = [];
+                let currentField = '';
+                let insideQuotes = false;
+                
+                for (let j = 0; j < lines[i].length; j++) {
+                  const char = lines[i][j];
+                  if (char === '"') {
+                    insideQuotes = !insideQuotes;
+                  } else if (char === ',' && !insideQuotes) {
+                    fields.push(currentField.trim().replace(/^"|"$/g, ''));
+                    currentField = '';
+                  } else {
+                    currentField += char;
+                  }
+                }
+                if (currentField) {
+                  fields.push(currentField.trim().replace(/^"|"$/g, ''));
+                }
+                
+                if (fields.length >= 3) {
+                  const areaName = fields[2];
+                  console.log('Found CSV area name:', areaName);
+                  
+                  // Extract state abbreviation from area name (e.g., "St. Louis, MO-IL HUD Metro FMR Area")
+                  const stateMatch = areaName.match(/,\s*([A-Z]{2})/);
+                  if (stateMatch) {
+                    const stateAbbr = stateMatch[1];
+                    const stateName = getStateNameFromAbbr(stateAbbr);
+                    
+                    // Update address state if missing
+                    if (stateName && !address.state) {
+                      address.state = stateName;
+                      console.log('✅ CSV fallback found state:', stateName);
+                    }
+                    
+                    // Try to extract city name from area name
+                    const cityMatch = areaName.match(/^([^,]+),/);
+                    if (cityMatch && !address.city && !address.town && !address.village) {
+                      // Update city if missing
+                      address.city = cityMatch[1].trim();
+                      console.log('✅ CSV fallback found city:', address.city);
+                    }
+                  }
+                }
+                break;
+              }
+            }
+          }
+        } catch (csvError) {
+          console.warn('⚠️ CSV fallback failed:', csvError);
+        }
+      }
       
       // Clean up county name - remove " County" suffix if present for matching
       const cleanCountyName = countyName ? countyName.replace(/ County$/i, '') + ' County' : 'Unknown County';
@@ -136,8 +230,8 @@ export function useZipCodeLookup(zipCode: string | null): UseZipCodeLookupResult
         county: cleanCountyName,
         state: address.state || 'Unknown State',
         state_abbr: getStateAbbreviation(address.state),
-        latitude: parseFloat(result.lat),
-        longitude: parseFloat(result.lon),
+        latitude: result ? parseFloat(result.lat || '0') : 0,
+        longitude: result ? parseFloat(result.lon || '0') : 0,
         city: address.city || address.town || address.village || undefined,
         population: undefined, // Would need separate Census API call
       };
@@ -208,5 +302,28 @@ function getStateAbbreviation(stateName: string | undefined): string {
   };
 
   return states[stateName] || stateName;
+}
+
+/**
+ * Convert state abbreviation to full name
+ */
+function getStateNameFromAbbr(abbr: string): string | undefined {
+  const states: { [key: string]: string } = {
+    'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas',
+    'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
+    'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
+    'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
+    'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+    'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
+    'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
+    'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
+    'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
+    'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+    'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
+    'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
+    'WI': 'Wisconsin', 'WY': 'Wyoming'
+  };
+
+  return states[abbr.toUpperCase()];
 }
 
